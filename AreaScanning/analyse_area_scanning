@@ -59,8 +59,8 @@ subX = 10
 
 
 wpA = (1.5, -0.2)
-wpB =
-wpC = 
+wpB = ()
+wpC = ()
 
 wpA_utm = latlon_to_utm(wpA[0], wpA[1])
 wpB_utm = latlon_to_utm(wpB[0], wpB[1])
@@ -87,7 +87,7 @@ vAB_orth = vAC
 # Read log files
 teamNB = len(sys.argv) - 1
 output_array = np.zeros((subX, subY, teamNB))
-for teamID, cvs_file in enumetate(sys.argv[1:]):#TODO all csv files
+for teamID, cvs_file in enumerate(sys.argv[1:]):#TODO all csv files
     position_utm = []
     with open(cvs_file) as logfile:
         data = csv.reader(logfile, delimiter=',')
