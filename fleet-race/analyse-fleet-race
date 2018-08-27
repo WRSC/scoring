@@ -1,0 +1,88 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+import csv
+import sys
+
+from LatLon import LatLon
+from pyproj import Proj
+import math
+import datetime
+
+utm_zone = 30
+
+
+projection = Proj(proj='utm', zone=utm_zone, ellps='WGS84')
+
+def latlon_to_utm(lat, lon):
+    """Returns (x, y) coordinates in metres"""
+    return projection(lon, lat)
+
+# CSV values
+# ISO 8601
+# Lat 
+# Lon
+# 
+#  y^
+#   |
+#   +-> x
+
+#   B
+#
+#
+#   C       A
+wpA = (50.821116, -1.310633)
+wpB = (50.822,-1.31188333)
+wpC = (50.821183,-1.3117666)
+RADIUS = 5 #acceptance radius in m
+
+#######################################################################################
+
+wpA_utm = latlon_to_utm(wpA[0], wpA[1])
+wpB_utm = latlon_to_utm(wpB[0], wpB[1])
+wpC_utm = latlon_to_utm(wpC[0], wpC[1])
+
+def dist2wp(M, wp):
+    return math.sqrt((M[0]-wp[0])**2 + (M[1] - wp[1])**2) 
+
+def isWpReached(M, wp):
+    return math.sqrt((M[0]-wp[0])**2 + (M[1] - wp[1])**2) < RADIUS
+
+cvs_file = sys.argv[1]
+
+positions_utm = []
+with open(cvs_file) as logfile:
+    data = csv.reader(logfile, delimiter=',')
+    for row in list(data)[1:]:
+        time = datetime.datetime.strptime(row[0], "%Y-%m-%dT%H:%M:%SZ")
+        latitude = float(row[1])
+        longitude = float(row[2])
+            
+        positions_utm.append((time, latlon_to_utm(latitude, longitude)))
+
+starttime = 0
+WPA_REACHED = False
+WPB_REACHED = False
+WPC_REACHED = False
+WPA2_REACHED = False
+for point in positions_utm:
+    if (not WPA_REACHED) and isWpReached(point[1], wpA_utm):
+        WPA_REACHED = True
+        print("WPA reached at ", point[0])
+        starttime = point[0]
+
+    if  WPA_REACHED and (not WPB_REACHED) and isWpReached(point[1], wpB_utm):
+        WPB_REACHED = True
+        print("WPB reached at ", point[0])
+
+
+    if  WPB_REACHED and (not WPC_REACHED) and isWpReached(point[1], wpC_utm):
+        WPC_REACHED = True
+        print("WPC reached at ", point[0])
+        
+
+    if  WPC_REACHED and (not WPA2_REACHED) and isWpReached(point[1], wpA_utm):
+        WPA2_REACHED = True
+        print("WPA reached at ", point[0])
+        print("Finish at ", point[0]) 
+
