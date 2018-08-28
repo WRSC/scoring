@@ -1,12 +1,12 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
 Analyse the result of a station keeping attempt
 """
 
+import bisect
 import csv
 import sys
 
-from LatLon import LatLon
 from pyproj import Proj
 import math
 import datetime
@@ -29,7 +29,8 @@ def latlon_to_utm(lat, lon):
 #   |
 #   +-> x
 
-CENTER = (41.68846, -8.82469)
+CENTER = (50.82083333, -1.310983333)  # Calshot sailboats
+CENTER = (50.82046666, -1.311983333)  # Calshot micro-sailboats
 
 CENTER_utm = latlon_to_utm(CENTER[0], CENTER[1])
 
@@ -55,7 +56,7 @@ RADIUS = 20 # 20 m
 TIMESPAN = 5 * 60   # 5 minutes
 
 time = []
-position_utm = []
+positions_utm = []
 
 # Read file
 with open(FILE) as logfile:
@@ -81,7 +82,7 @@ startTime = time[idx]
 # get all points from the next 5 minutes
 endTime = startTime + TIMESPAN
 endIdx = bisect.bisect(time, endTime)
-if endIdx >= len(position):
+if endIdx >= len(positions_utm):
     print("end of 5 minute position keeping not in dataset!")
 
 positionsOfInterest = positions_utm[idx:endIdx]
