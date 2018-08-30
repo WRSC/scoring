@@ -92,17 +92,6 @@ def analyse_file(FILE):
 
     positionsOfInterest = positions_utm[idx:endIdx]
 
-    minute_idx = bisect.bisect(time, startTime + 60)
-    first_minute = positionsOfInterest[idx:minute_idx]
-    # print('%d points in first minute' % minute_idx)
-    for point in first_minute:
-        distance = dist2center(point)
-        if distance > 20:
-            print('Left 20m circle during first minute')
-            return
-    # else:
-    #     print('Stayed within 20m during first minute :-)')
-
     print('Using %d points' % len(positionsOfInterest))
 
     # get Pc
