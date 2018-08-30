@@ -14,6 +14,7 @@ import sys
 import pandas as pd
 import collections
 from fractions import Fraction
+import json
 # import yaml
 # from sailing_robot.navigation import Navigation
 
@@ -29,10 +30,10 @@ def latlon_to_utm(lat, lon):
     """Returns (x, y) coordinates in metres"""
     return projection(lon, lat)
 
-# def utm_to_latlon(x, y):
-#     """Returns a LatLon object"""
-#     lon, lat = projection(x, y, inverse=True)
-#     return LatLon(lat, lon)
+def utm_to_latlon(coord):
+    """Returns a LatLon object"""
+    lon, lat = projection(coord[0], coord[1], inverse=True)
+    return lat, lon
 
 
 
@@ -41,7 +42,7 @@ def latlon_to_utm(lat, lon):
 # Lat *10^^7
 # Lon *10^^7
 
-#   C
+#   C         D
 #   +-+-+-+-+-+
 #   +-+-+-+-+-+
 #   +-+-+-+-+-+
@@ -55,7 +56,7 @@ def latlon_to_utm(lat, lon):
 # Number of subdivision of the grid
 subY = 58
 subX = 45
-
+cell_size = 4
 
 # gps log file given as the 2nd argument
 # cvs_file = sys.argv[2]
@@ -88,8 +89,16 @@ vAB_orth = vAC
 # vAB_orth = np.array([-vAB[1], vAB[0]])
 
 
-
-
+def cell_ij_to_coord(i,j):
+    A = wpA_utm + vAB*cell_size*i + vAB_orth*cell_size*j
+    B = A+vAB_orth*cell_size
+    C = B+vAB*cell_size
+    D = A+vAB*cell_size
+    A = utm_to_latlon(A)
+    B = utm_to_latlon(B)
+    C = utm_to_latlon(C)
+    D = utm_to_latlon(D)
+    return A,B,C,D
 
 
 def generate_visit_set(filename):
@@ -106,8 +115,8 @@ def generate_visit_set(filename):
     for point in position_utm: 
         # projection of point in the (wpA_utm; vAB,vAB_orth) base
         point_base = [point[0] - wpA_utm[0], point[1] - wpA_utm[1]]
-        point_i = np.dot(point_base, vAB)*subX/2/AB
-        point_j = np.dot(point_base, vAB_orth)*subY/2/AC
+        point_i = np.dot(point_base, vAB)*subX/AB
+        point_j = np.dot(point_base, vAB_orth)*subY/AC
         
         if point_i < 0 or point_j < 0 or point_i > subX or point_j > subY:
             continue 
@@ -127,8 +136,17 @@ CellVisitors = collections.namedtuple('CellVisitors', 'in_window out_of_window')
 #    in_window
 master_data = pd.read_csv(sys.argv[1])
 master_data['visit_set'] = master_data.filename.apply(generate_visit_set)
+attempt_per_cell = collections.defaultdict(int)
 for row in master_data.itertuples():
     print(row.filename, len(row.visit_set))
+    for cell_pos in row.visit_set:
+        attempt_per_cell[cell_pos] += 1
+
+data = []
+for cell, count in attempt_per_cell.items():
+    data.append([cell_ij_to_coord(cell[0],cell[1]), count])
+with open("heat_map_data"+sys.argv[1]+".json",'w') as f:
+    json.dump(data,f)
 
 # Build map of what teams visited which cells, in their in-window and out-of-window attempts
 cell_visits = collections.defaultdict(lambda: CellVisitors(set(), set()))
