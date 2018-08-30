@@ -17,7 +17,7 @@ from fractions import Fraction
 # import yaml
 # from sailing_robot.navigation import Navigation
 
-from LatLon import LatLon
+# from LatLon import LatLon
 from pyproj import Proj
 import numpy as np
 
@@ -29,10 +29,10 @@ def latlon_to_utm(lat, lon):
     """Returns (x, y) coordinates in metres"""
     return projection(lon, lat)
 
-def utm_to_latlon(x, y):
-    """Returns a LatLon object"""
-    lon, lat = projection(x, y, inverse=True)
-    return LatLon(lat, lon)
+# def utm_to_latlon(x, y):
+#     """Returns a LatLon object"""
+#     lon, lat = projection(x, y, inverse=True)
+#     return LatLon(lat, lon)
 
 
 
@@ -95,7 +95,8 @@ vAB_orth = vAC
 def generate_visit_set(filename):
     with open(filename) as logfile:
         data = csv.reader(logfile, delimiter=',')
-        for row in list(data)[:1]:
+        position_utm = []
+        for row in list(data)[1:]:
             latitude = float(row[1])
             longitude = float(row[2])
             position_utm.append(latlon_to_utm(latitude, longitude))
@@ -116,13 +117,6 @@ def generate_visit_set(filename):
     return outputs
 
 
-def generate_weight(data):
-    weight_array = np.ones(subX, subY)
-    for i in range(subX):
-        for j in range(subY):
-            for 
-
-
 
 CellVisitors = collections.namedtuple('CellVisitors', 'in_window out_of_window')
 
@@ -132,7 +126,9 @@ CellVisitors = collections.namedtuple('CellVisitors', 'in_window out_of_window')
 #    boat_name
 #    in_window
 master_data = pd.read_csv(sys.argv[1])
-master_data.visit_set = master_data.filename.apply(generate_visit_matrix)
+master_data['visit_set'] = master_data.filename.apply(generate_visit_set)
+for row in master_data.itertuples():
+    print(row.filename, len(row.visit_set))
 
 # Build map of what teams visited which cells, in their in-window and out-of-window attempts
 cell_visits = collections.defaultdict(lambda: CellVisitors(set(), set()))
