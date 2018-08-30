@@ -1,0 +1,167 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+"""
+Analyse the result of a area scanning attempt
+This script is for use independent of ROS!
+
+
+man:
+    analyse_are_scanning path/to/yaml/parameter/file.yaml  path/to/gps/log.cvs
+"""
+
+import csv
+import sys
+import pandas as pd
+import collections
+from fractions import Fraction
+# import yaml
+# from sailing_robot.navigation import Navigation
+
+from LatLon import LatLon
+from pyproj import Proj
+import numpy as np
+
+utm_zone = 30
+
+projection = Proj(proj='utm', zone=utm_zone, ellps='WGS84')
+
+def latlon_to_utm(lat, lon):
+    """Returns (x, y) coordinates in metres"""
+    return projection(lon, lat)
+
+def utm_to_latlon(x, y):
+    """Returns a LatLon object"""
+    lon, lat = projection(x, y, inverse=True)
+    return LatLon(lat, lon)
+
+
+
+# CSV values
+# hhmmssdd
+# Lat *10^^7
+# Lon *10^^7
+
+#   C
+#   +-+-+-+-+-+
+#   +-+-+-+-+-+
+#   +-+-+-+-+-+
+#   A         B
+# 
+#  y^
+#   |
+#   +-> x
+#
+
+# Number of subdivision of the grid
+subY = 58
+subX = 45
+
+
+# gps log file given as the 2nd argument
+# cvs_file = sys.argv[2]
+
+
+wpC = (50.8210729998,-1.31465664793)
+wpD = (50.8222207292,-1.31285527881)
+wpA = (50.8196023064,-1.31232136805)
+wpB = (50.82075,-1.31052)
+
+
+wpA_utm = latlon_to_utm(wpA[0], wpA[1])
+wpB_utm = latlon_to_utm(wpB[0], wpB[1])
+wpC_utm = latlon_to_utm(wpC[0], wpC[1])
+
+
+# Unit vector AB
+vAB = np.array([wpB_utm[0] - wpA_utm[0], wpB_utm[1] - wpA_utm[1]])
+AB = np.linalg.norm(vAB)
+vAB = vAB/AB
+
+
+# Unit vector AC
+vAC = np.array([wpC_utm[0] - wpA_utm[0], wpC_utm[1] - wpA_utm[1]])
+AC = np.linalg.norm(vAC)
+vAC = vAC/AC
+vAB_orth = vAC
+
+# Unit vector orth to AB
+# vAB_orth = np.array([-vAB[1], vAB[0]])
+
+
+
+
+
+
+def generate_visit_set(filename):
+    with open(filename) as logfile:
+        data = csv.reader(logfile, delimiter=',')
+        for row in list(data)[:1]:
+            latitude = float(row[1])
+            longitude = float(row[2])
+            position_utm.append(latlon_to_utm(latitude, longitude))
+
+    outputs = set()
+
+    for point in position_utm: 
+        # projection of point in the (wpA_utm; vAB,vAB_orth) base
+        point_base = [point[0] - wpA_utm[0], point[1] - wpA_utm[1]]
+        point_i = np.dot(point_base, vAB)*subX/2/AB
+        point_j = np.dot(point_base, vAB_orth)*subY/2/AC
+        
+        if point_i < 0 or point_j < 0 or point_i > subX or point_j > subY:
+            continue 
+
+        outputs.add((int(point_i), int(point_j)))
+        #output_array[int(point_i)][int(point_j)] = 1
+    return outputs
+
+
+def generate_weight(data):
+    weight_array = np.ones(subX, subY)
+    for i in range(subX):
+        for j in range(subY):
+            for 
+
+
+
+CellVisitors = collections.namedtuple('CellVisitors', 'in_window out_of_window')
+
+# read mater csv
+# Master data columns:
+#    filename
+#    boat_name
+#    in_window
+master_data = pd.read_csv(sys.argv[1])
+master_data.visit_set = master_data.filename.apply(generate_visit_matrix)
+
+# Build map of what teams visited which cells, in their in-window and out-of-window attempts
+cell_visits = collections.defaultdict(lambda: CellVisitors(set(), set()))
+for row in master_data[master_data.in_window].itertuples():
+    for cell in row.visit_set:
+        cell_visits[cell].in_window.add(row.boat_name)
+
+for row in master_data[~master_data.in_window].itertuples():
+    for cell in row.visit_set:
+        cell_visits[cell].out_of_window.add(row.boat_name)
+ 
+boat_total_points_in_window = collections.defaultdict(lambda: 0)
+boat_total_points_out_of_window = collections.defaultdict(lambda: 0)
+
+for row in master_data[master_data.in_window].itertuples():
+    for cell in row.visit_set:
+        boat_total_points_in_window[row.boat_name] += Fraction(1, len(cell_visits[cell].in_window))
+
+for row in master_data[~master_data.in_window].itertuples():
+    for cell in row.visit_set:
+        boat_total_points_out_of_window[row.boat_name] += Fraction(1, len(cell_visits[cell].in_window | cell_visits[cell].out_of_window))
+
+print("in window")
+for boat, total_points in sorted(boat_total_points_in_window.items()):
+    print(boat, float(total_points))
+
+print("")
+print("out of window")
+for boat, total_points in sorted(boat_total_points_out_of_window.items()):
+    print(boat, float(total_points))
+
+
