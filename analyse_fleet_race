@@ -1,6 +1,14 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 """Analyse an attempt at the fleet race.
+
+This is the simplest challenge to analyse. Boats go to waypoints A, B, C, A.
+They reach a marker by getting within RADIUS metres of it.
+
+Boats that complete more of the course beat boats that complete less of it.
+For boats that reach the same number of waypoints, the duration
+from their start times determines the winner.
+Bonus or penalty times may adjust this.
 """
 
 import csv
@@ -10,6 +18,7 @@ from pyproj import Proj
 import math
 import datetime
 
+# Your UTM zone depends on your longitude; see http://www.dmap.co.uk/utmworld.htm
 utm_zone = 30
 
 
@@ -39,20 +48,22 @@ RADIUS = 5 #acceptance radius in m
 
 #######################################################################################
 
+# Convert all coordinates to UTM, so we can work with metres on a flat plane
 wpA_utm = latlon_to_utm(wpA[0], wpA[1])
 wpB_utm = latlon_to_utm(wpB[0], wpB[1])
 wpC_utm = latlon_to_utm(wpC[0], wpC[1])
 
 def dist2wp(M, wp):
+    """Direct distance between two points in metres"""
     return math.sqrt((M[0]-wp[0])**2 + (M[1] - wp[1])**2) 
 
 def isWpReached(M, wp):
-    return math.sqrt((M[0]-wp[0])**2 + (M[1] - wp[1])**2) < RADIUS
+    return dist2wp(M, wp) < RADIUS
 
-cvs_file = sys.argv[1]
+csv_file = sys.argv[1]
 
 positions_utm = []
-with open(cvs_file) as logfile:
+with open(csv_file) as logfile:
     data = csv.reader(logfile, delimiter=',')
     for row in list(data)[1:]:
         time = datetime.datetime.strptime(row[0], "%Y-%m-%dT%H:%M:%SZ")
@@ -66,23 +77,23 @@ WPA_REACHED = False
 WPB_REACHED = False
 WPC_REACHED = False
 WPA2_REACHED = False
-for point in positions_utm:
-    if (not WPA_REACHED) and isWpReached(point[1], wpA_utm):
+for timestamp, point in positions_utm:
+    if (not WPA_REACHED) and isWpReached(point, wpA_utm):
         WPA_REACHED = True
-        print("WPA reached at ", point[0])
-        starttime = point[0]
+        print("WPA reached at", timestamp)
+        starttime = timestamp
 
-    if  WPA_REACHED and (not WPB_REACHED) and isWpReached(point[1], wpB_utm):
+    if  WPA_REACHED and (not WPB_REACHED) and isWpReached(point, wpB_utm):
         WPB_REACHED = True
-        print("WPB reached at ", point[0])
+        print("WPB reached at", timestamp)
 
 
-    if  WPB_REACHED and (not WPC_REACHED) and isWpReached(point[1], wpC_utm):
+    if  WPB_REACHED and (not WPC_REACHED) and isWpReached(point, wpC_utm):
         WPC_REACHED = True
-        print("WPC reached at ", point[0])
+        print("WPC reached at", timestamp)
         
 
-    if  WPC_REACHED and (not WPA2_REACHED) and isWpReached(point[1], wpA_utm):
+    if  WPC_REACHED and (not WPA2_REACHED) and isWpReached(point, wpA_utm):
         WPA2_REACHED = True
-        print("WPA reached at ", point[0])
-        print("Finish at ", point[0]) 
+        print("WPA reached at", timestamp)
+        print("Finished at", timestamp) 
