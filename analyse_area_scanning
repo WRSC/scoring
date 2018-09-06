@@ -141,6 +141,7 @@ for row in master_data.itertuples():
     for cell_pos in row.visit_set:
         attempt_per_cell[cell_pos] += 1
 
+# Dump out data for plotting heat maps of how often cells were visited.
 data = []
 for cell, count in attempt_per_cell.items():
     data.append([cell_ij_to_coord(cell[0],cell[1]), count])
