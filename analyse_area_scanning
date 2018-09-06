@@ -1,7 +1,28 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 """
-Analyse the result of a set of area scanning attempts
+Analyse the result of a set of area scanning attempts.
+
+This is the most complex analysis, because the score for each attempt depends
+on other attempts.
+
+Briefly, the idea is that each square is worth one point, but that point may
+be divided among boats that visited the same square. The idea is to make the
+least visited squares more valuable, encouraging boats to collectively scan
+more of the grid. See the rules for more details.
+
+We gave each class a time window, but allowed shorter attempts later in the day.
+Attempts within the time window were scored against other attempts in the same window.
+Later attempts were scored against attempts in the window,
+excluding earlier attemtps by the same boat.
+
+Usage:
+
+    ./analyse_area_scanning master.csv
+
+The master CSV is a CSV file listing the attempts made by boats in one class.
+It's expected to have columns boat_name, in_window and filename (pointing to
+the GPS trace for that attempt).
 """
 
 import csv
@@ -39,7 +60,7 @@ def utm_to_latlon(coord):
 #   +-> x
 #
 
-# Number of subdivision of the grid
+# Number of subdivisions of the grid
 subY = 58
 subX = 45
 cell_size = 4  # metres along side of one grid cell
@@ -56,12 +77,10 @@ wpA_utm = latlon_to_utm(wpA[0], wpA[1])
 wpB_utm = latlon_to_utm(wpB[0], wpB[1])
 wpC_utm = latlon_to_utm(wpC[0], wpC[1])
 
-
 # Unit vector AB
 vAB = np.array([wpB_utm[0] - wpA_utm[0], wpB_utm[1] - wpA_utm[1]])
 AB = np.linalg.norm(vAB)
 vAB = vAB/AB
-
 
 # Unit vector AC
 vAC = np.array([wpC_utm[0] - wpA_utm[0], wpC_utm[1] - wpA_utm[1]])
@@ -69,11 +88,8 @@ AC = np.linalg.norm(vAC)
 vAC = vAC/AC
 vAB_orth = vAC
 
-# Unit vector orth to AB
-# vAB_orth = np.array([-vAB[1], vAB[0]])
-
-
 def cell_ij_to_coord(i,j):
+    """Get the (lat, lon) of the 4 corners of a grid cell"""
     A = wpA_utm + vAB*cell_size*i + vAB_orth*cell_size*j
     B = A+vAB_orth*cell_size
     C = B+vAB*cell_size
@@ -110,10 +126,9 @@ def generate_visit_set(filename):
     return outputs
 
 
-
 CellVisitors = collections.namedtuple('CellVisitors', 'in_window out_of_window')
 
-# read mater csv
+# read master csv
 # Master data columns:
 #    filename
 #    boat_name

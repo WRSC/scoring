@@ -1,6 +1,15 @@
 #!/usr/bin/python3
 """
-Analyse the result of a station keeping attempt
+Analyse the result of one or more station keeping attempts
+
+For each attempt, this finds when the boat entered a 20m radius of the marker.
+Then it takes the points for 5 minutes after that, and computes their centre.
+This centre needs to be within 20m of the marker.
+Finally, it computes the radius of a circle containing 95% of these points.
+
+Usage:
+
+    ./analyse_station_keeping attempt1.csv [attempt2.csv [...]]
 """
 
 import bisect
@@ -86,15 +95,14 @@ def analyse_file(FILE):
 
     print('Using %d points' % len(positionsOfInterest))
 
-    # get Pc
-    # sum up x and y positions to get Pc
-    averageX = 0.
-    averageY = 0.
-    for point in positionsOfInterest:
-        averageX += point[0]
-        averageY += point[1]
+    # get Pc (average of points in 5 minute time keeping attempt)
+    sumX = 0.
+    sumY = 0.
+    for (x, y) in positionsOfInterest:
+        sumX += x
+        sumY += y
 
-    Pc = (averageX / len(positionsOfInterest), averageY / len(positionsOfInterest))
+    Pc = (sumX / len(positionsOfInterest), sumY / len(positionsOfInterest))
 
     if dist2center(Pc) > RADIUS:
         print("Pc is outside the 20 m circle!")
