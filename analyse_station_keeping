@@ -11,8 +11,8 @@ from pyproj import Proj
 import math
 import datetime
 
+# Your UTM zone depends on your longitude; see http://www.dmap.co.uk/utmworld.htm
 utm_zone = 30
-
 
 projection = Proj(proj='utm', zone=utm_zone, ellps='WGS84')
 
@@ -32,24 +32,16 @@ def latlon_to_utm(lat, lon):
 # CENTER = (50.82083333, -1.310983333)  # Calshot sailboats
 CENTER = (50.82046666, -1.311983333)  # Calshot micro-sailboats
 
+################################################################################
+
 CENTER_utm = latlon_to_utm(CENTER[0], CENTER[1])
 
 def dist2center(M):
     return dist2wp(M, CENTER_utm)
 
-
 def dist2wp(M, wp):
     return math.sqrt((M[0]-wp[0])**2 + (M[1] - wp[1])**2) 
 
-def convertToSec(timeString): #TODO
-    # hh mm ss dd
-    hours = int(timeString[0:2])
-    minutes = int(timeString[2:4])
-    seconds = int(timeString[4:6])
-    time = hours * 60 * 60 + minutes * 60 + seconds
-    return time
-
-# FILE = sys.argv[1]
 def analyse_file(FILE):
     # Competition rules
     RADIUS = 20 # 20 m

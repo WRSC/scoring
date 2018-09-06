@@ -25,7 +25,6 @@ import datetime
 # Your UTM zone depends on your longitude; see http://www.dmap.co.uk/utmworld.htm
 utm_zone = 30
 
-
 projection = Proj(proj='utm', zone=utm_zone, ellps='WGS84')
 
 def latlon_to_utm(lat, lon):

@@ -14,6 +14,7 @@ import json
 from pyproj import Proj
 import numpy as np
 
+# Your UTM zone depends on your longitude; see http://www.dmap.co.uk/utmworld.htm
 utm_zone = 30
 
 projection = Proj(proj='utm', zone=utm_zone, ellps='WGS84')
@@ -23,16 +24,9 @@ def latlon_to_utm(lat, lon):
     return projection(lon, lat)
 
 def utm_to_latlon(coord):
-    """Returns a LatLon object"""
+    """Returns (lat, lon) in degrees"""
     lon, lat = projection(coord[0], coord[1], inverse=True)
     return lat, lon
-
-
-
-# CSV values
-# hhmmssdd
-# Lat *10^^7
-# Lon *10^^7
 
 #   C         D
 #   +-+-+-+-+-+
@@ -48,18 +42,16 @@ def utm_to_latlon(coord):
 # Number of subdivision of the grid
 subY = 58
 subX = 45
-cell_size = 4
-
-# gps log file given as the 2nd argument
-# cvs_file = sys.argv[2]
-
+cell_size = 4  # metres along side of one grid cell
 
 wpC = (50.8210729998,-1.31465664793)
 wpD = (50.8222207292,-1.31285527881)
 wpA = (50.8196023064,-1.31232136805)
 wpB = (50.82075,-1.31052)
 
+################################################################################
 
+# Convert all coordinates to UTM, so we can work with metres on a flat plane
 wpA_utm = latlon_to_utm(wpA[0], wpA[1])
 wpB_utm = latlon_to_utm(wpB[0], wpB[1])
 wpC_utm = latlon_to_utm(wpC[0], wpC[1])
