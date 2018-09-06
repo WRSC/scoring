@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 """Analyse an attempt at the fleet race.
 
@@ -9,6 +9,10 @@ Boats that complete more of the course beat boats that complete less of it.
 For boats that reach the same number of waypoints, the duration
 from their start times determines the winner.
 Bonus or penalty times may adjust this.
+
+Usage:
+
+    ./analyse_fleet_race attempt.csv
 """
 
 import csv
