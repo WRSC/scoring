@@ -1,12 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 """
-Analyse the result of a area scanning attempt
-This script is for use independent of ROS!
-
-
-man:
-    analyse_are_scanning path/to/yaml/parameter/file.yaml  path/to/gps/log.cvs
+Analyse the result of a set of area scanning attempts
 """
 
 import csv
@@ -15,10 +10,7 @@ import pandas as pd
 import collections
 from fractions import Fraction
 import json
-# import yaml
-# from sailing_robot.navigation import Navigation
 
-# from LatLon import LatLon
 from pyproj import Proj
 import numpy as np
 
@@ -177,5 +169,3 @@ print("")
 print("out of window")
 for boat, total_points in sorted(boat_total_points_out_of_window.items()):
     print(boat, float(total_points))
-
-
