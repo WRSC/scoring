@@ -13,8 +13,8 @@ more of the grid. See the rules for more details.
 
 We gave each class a time window, but allowed shorter attempts later in the day.
 Attempts within the time window were scored against other attempts in the same window.
-Later attempts were scored against attempts in the window,
-excluding earlier attemtps by the same boat.
+Later attempts were scored against attempts both in and out of the window,
+but a boat was not penalised for visiting the same cell in multiple attempts.
 
 Usage:
 
@@ -90,18 +90,20 @@ vAB_orth = vAC
 
 def cell_ij_to_coord(i,j):
     """Get the (lat, lon) of the 4 corners of a grid cell"""
-    A = wpA_utm + vAB*cell_size*i + vAB_orth*cell_size*j
-    B = A+vAB_orth*cell_size
-    C = B+vAB*cell_size
-    D = A+vAB*cell_size
-    A = utm_to_latlon(A)
-    B = utm_to_latlon(B)
-    C = utm_to_latlon(C)
-    D = utm_to_latlon(D)
-    return A,B,C,D
-
+    A = wpA_utm + (vAB * cell_size * i) + (vAB_orth * cell_size * j)
+    B = A + (vAB_orth * cell_size)
+    C = B + (vAB * cell_size)
+    D = A + (vAB * cell_size)
+    return (utm_to_latlon(A),
+            utm_to_latlon(B),
+            utm_to_latlon(C),
+            utm_to_latlon(D))
 
 def generate_visit_set(filename):
+    """Find the set of grid squares visited by one attempt.
+
+    *filename* should point to a CSV file of a GPS track (timestamp, lat, long).
+    """
     with open(filename) as logfile:
         data = csv.reader(logfile, delimiter=',')
         position_utm = []
@@ -114,15 +116,14 @@ def generate_visit_set(filename):
 
     for point in position_utm: 
         # projection of point in the (wpA_utm; vAB,vAB_orth) base
+        # i.e. convert UTM coordinates to coordinates in terms of grid cells.
         point_base = [point[0] - wpA_utm[0], point[1] - wpA_utm[1]]
         point_i = np.dot(point_base, vAB)*subX/AB
         point_j = np.dot(point_base, vAB_orth)*subY/AC
         
-        if point_i < 0 or point_j < 0 or point_i > subX or point_j > subY:
-            continue 
+        if (0 <= point_i < subX) and (0 <= point_j < subY):
+            outputs.add((int(point_i), int(point_j)))
 
-        outputs.add((int(point_i), int(point_j)))
-        #output_array[int(point_i)][int(point_j)] = 1
     return outputs
 
 
@@ -134,10 +135,14 @@ CellVisitors = collections.namedtuple('CellVisitors', 'in_window out_of_window')
 #    boat_name
 #    in_window
 master_data = pd.read_csv(sys.argv[1])
+
+# For each attempt, get the set of cells visited
 master_data['visit_set'] = master_data.filename.apply(generate_visit_set)
+
+# Now find the total number of visitors for each cell
 attempt_per_cell = collections.defaultdict(int)
 for row in master_data.itertuples():
-    print(row.filename, len(row.visit_set))
+    print(row.filename, len(row.visit_set), "squares visited")
     for cell_pos in row.visit_set:
         attempt_per_cell[cell_pos] += 1
 
@@ -158,22 +163,27 @@ for row in master_data[~master_data.in_window].itertuples():
     for cell in row.visit_set:
         cell_visits[cell].out_of_window.add(row.boat_name)
  
-boat_total_points_in_window = collections.defaultdict(lambda: 0)
-boat_total_points_out_of_window = collections.defaultdict(lambda: 0)
-
+# Calculate the points for in-windown and out-of-window attempts, dividing
+# the point for each grid square among boats that visited it.
+boat_total_points_in_window = collections.defaultdict(int)
 for row in master_data[master_data.in_window].itertuples():
     for cell in row.visit_set:
-        boat_total_points_in_window[row.boat_name] += Fraction(1, len(cell_visits[cell].in_window))
+        boat_total_points_in_window[row.boat_name] += \
+            Fraction(1, len(cell_visits[cell].in_window))
 
+boat_total_points_out_of_window = collections.defaultdict(int)
 for row in master_data[~master_data.in_window].itertuples():
     for cell in row.visit_set:
-        boat_total_points_out_of_window[row.boat_name] += Fraction(1, len(cell_visits[cell].in_window | cell_visits[cell].out_of_window))
+        boat_total_points_out_of_window[row.boat_name] += \
+            Fraction(1, len(cell_visits[cell].in_window | cell_visits[cell].out_of_window))
 
-print("in window")
+# Display results
+print()
+print("Attempts in time window:")
 for boat, total_points in sorted(boat_total_points_in_window.items()):
-    print(boat, float(total_points))
+    print(boat, float(total_points), 'points')
 
-print("")
-print("out of window")
+print()
+print("Attempts out of time window:")
 for boat, total_points in sorted(boat_total_points_out_of_window.items()):
-    print(boat, float(total_points))
+    print(boat, float(total_points), 'points')
