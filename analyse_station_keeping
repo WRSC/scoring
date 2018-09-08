@@ -18,6 +18,7 @@ import sys
 
 from pyproj import Proj
 import math
+import numpy
 import datetime
 
 # Your UTM zone depends on your longitude; see http://www.dmap.co.uk/utmworld.htm
@@ -96,23 +97,14 @@ def analyse_file(FILE):
     print('Using %d points' % len(positionsOfInterest))
 
     # get Pc (average of points in 5 minute time keeping attempt)
-    sumX = 0.
-    sumY = 0.
-    for (x, y) in positionsOfInterest:
-        sumX += x
-        sumY += y
-
-    Pc = (sumX / len(positionsOfInterest), sumY / len(positionsOfInterest))
+    Pc = numpy.array(positionsOfInterest).mean(axis=0)
 
     if dist2center(Pc) > RADIUS:
         print("Pc is outside the 20 m circle!")
         return 
 
     # calculate distance to Pc for all points
-    Pc_distances = []
-    for point in positionsOfInterest:
-        distance = dist2wp(point, Pc)
-        Pc_distances.append(distance)
+    Pc_distances = [dist2wp(point, Pc) for point in positionsOfInterest]
 
     # remove 5% of points with largest distance to Pc
     # find next largest distance, this is the radius
