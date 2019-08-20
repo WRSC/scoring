@@ -40,13 +40,14 @@ def latlon_to_utm(lat, lon):
 #   |
 #   +-> x
 
-#   B
-#
-#
-#   C       A
-wpA = (50.821116, -1.310633)
-wpB = (50.822,-1.31188333)
-wpC = (50.821183,-1.3117666)
+#          B
+#          | \
+#          |   \
+#   D<-----C    A
+wpA = (29.863003, 121.542088)
+wpB = (29.863291, 121.541788)
+wpC = (29.863025, 121.541750)
+wpD = (29.863014, 121.541450)
 RADIUS = 5 #acceptance radius in m
 
 #######################################################################################
@@ -55,6 +56,7 @@ RADIUS = 5 #acceptance radius in m
 wpA_utm = latlon_to_utm(wpA[0], wpA[1])
 wpB_utm = latlon_to_utm(wpB[0], wpB[1])
 wpC_utm = latlon_to_utm(wpC[0], wpC[1])
+wpD_utm = latlon_to_utm(wpD[0], wpD[1])
 
 def dist2wp(M, wp):
     """Direct distance between two points in metres"""
@@ -79,12 +81,12 @@ starttime = 0
 WPA_REACHED = False
 WPB_REACHED = False
 WPC_REACHED = False
-WPA2_REACHED = False
+WPD_REACHED = False
 for timestamp, point in positions_utm:
     if (not WPA_REACHED) and isWpReached(point, wpA_utm):
         WPA_REACHED = True
         print("WPA reached at", timestamp)
-        starttime = timestamp
+        start_time = timestamp
 
     if  WPA_REACHED and (not WPB_REACHED) and isWpReached(point, wpB_utm):
         WPB_REACHED = True
@@ -96,7 +98,11 @@ for timestamp, point in positions_utm:
         print("WPC reached at", timestamp)
         
 
-    if  WPC_REACHED and (not WPA2_REACHED) and isWpReached(point, wpA_utm):
-        WPA2_REACHED = True
-        print("WPA reached at", timestamp)
+    if  WPC_REACHED and (not WPD_REACHED) and isWpReached(point, wpD_utm):
+        WPD_REACHED = True
+        finish_time = timestamp
+        print("WPD reached at", timestamp)
         print("Finished at", timestamp) 
+        total_time = finish_time - start_time
+        print("Total time", total_time)
+
