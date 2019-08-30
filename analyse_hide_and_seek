@@ -1,0 +1,121 @@
+#!/usr/bin/python3
+"""
+Analyse the result of one or more station keeping attempts
+
+For each attempt, this finds when the boat entered a 20m radius of the marker.
+Then it takes the points for 5 minutes after that, and computes their centre.
+This centre needs to be within 20m of the marker.
+Finally, it computes the radius of a circle containing 95% of these points.
+
+Usage:
+
+    ./analyse_station_keeping attempt1.csv [attempt2.csv [...]]
+"""
+
+import bisect
+import csv
+import sys
+
+from pyproj import Proj
+import math
+import numpy
+import datetime
+
+# Your UTM zone depends on your longitude; see http://www.dmap.co.uk/utmworld.htm
+utm_zone = 30
+
+projection = Proj(proj='utm', zone=utm_zone, ellps='WGS84')
+
+def latlon_to_utm(lat, lon):
+    """Returns (x, y) coordinates in metres"""
+    return projection(lon, lat)
+
+# CSV values
+# ISO 8601
+# Lat 
+# Lon
+# 
+#  y^
+#   |
+#   +-> x
+
+# CENTER = (50.82083333, -1.310983333)  # Calshot sailboats
+CENTER = (50.82046666, -1.311983333)  # Calshot micro-sailboats
+
+################################################################################
+
+CENTER_utm = latlon_to_utm(CENTER[0], CENTER[1])
+
+def dist2center(M):
+    return dist2wp(M, CENTER_utm)
+
+def dist2wp(M, wp):
+    return math.sqrt((M[0]-wp[0])**2 + (M[1] - wp[1])**2) 
+
+def analyse_file(FILE):
+    # Competition rules
+    RADIUS = 20 # 20 m
+    TIMESPAN = 5 * 60   # 5 minutes
+
+    time = []
+    positions_utm = []
+
+    # Read file
+    with open(FILE) as logfile:
+        data = csv.reader(logfile, delimiter=',')
+        for row in list(data)[1:]:
+            time.append(datetime.datetime.strptime(row[0], "%Y-%m-%dT%H:%M:%SZ").timestamp()) #store epoch
+            latitude = float(row[1])
+            longitude = float(row[2])
+            positions_utm.append(latlon_to_utm(latitude, longitude))
+
+
+    # iterate through points:
+    # Find first point in 20 m radius
+    idx = 0
+    distance = 23
+    while distance > RADIUS:
+        idx +=1
+        if idx >= len(positions_utm):
+            print(FILE + " not reached the zone")
+            return
+        distance = dist2center(positions_utm[idx])
+
+    ## get time of that point
+    startTime = time[idx]
+
+    # get all points from the next 5 minutes
+    endTime = startTime + TIMESPAN
+    endIdx = bisect.bisect(time, endTime)
+    if endIdx >= len(positions_utm):
+        print("end of 5 minute position keeping not in dataset!")
+        print(0)
+        return
+
+    positionsOfInterest = positions_utm[idx:endIdx]
+
+    print('Using %d points' % len(positionsOfInterest))
+
+    # get Pc (average of points in 5 minute time keeping attempt)
+    Pc = numpy.array(positionsOfInterest).mean(axis=0)
+
+    if dist2center(Pc) > RADIUS:
+        print("Pc is outside the 20 m circle!")
+        return 
+
+    # calculate distance to Pc for all points
+    Pc_distances = [dist2wp(point, Pc) for point in positionsOfInterest]
+
+    # remove 5% of points with largest distance to Pc
+    # find next largest distance, this is the radius
+    Pc_distances.sort()
+    #print(Pc_distances)
+    idx_95 = int(round(len(Pc_distances) * 0.95))
+    considered_95 = Pc_distances[0:idx_95]
+    finalRadius = considered_95[-1]
+    print("The position keeping radius is " + str(finalRadius))
+
+for FILE in sys.argv[1:]:
+    print(FILE)
+    analyse_file(FILE)
+    print()
