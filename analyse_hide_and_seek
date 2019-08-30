@@ -1,28 +1,29 @@
 #!/usr/bin/python3
-"""
-Analyse the result of one or more station keeping attempts
+# -*- coding: utf-8 -*-
+"""Analyse an attempt at the Hide and Seek.
 
-For each attempt, this finds when the boat entered a 20m radius of the marker.
-Then it takes the points for 5 minutes after that, and computes their centre.
-This centre needs to be within 20m of the marker.
-Finally, it computes the radius of a circle containing 95% of these points.
+This is the simplest challenge to analyse. Boats go to waypoints A, B, C, A.
+They reach a marker by getting within RADIUS metres of it.
+
+Boats that complete more of the course beat boats that complete less of it.
+For boats that reach the same number of waypoints, the duration
+from their start times determines the winner.
+Bonus or penalty times may adjust this.
 
 Usage:
 
-    ./analyse_station_keeping attempt1.csv [attempt2.csv [...]]
+    ./analyse_fleet_race attempt.csv
 """
 
-import bisect
 import csv
 import sys
 
 from pyproj import Proj
 import math
-import numpy
 import datetime
 
 # Your UTM zone depends on your longitude; see http://www.dmap.co.uk/utmworld.htm
-utm_zone = 30
+utm_zone = 51
 
 projection = Proj(proj='utm', zone=utm_zone, ellps='WGS84')
 
@@ -39,83 +40,91 @@ def latlon_to_utm(lat, lon):
 #   |
 #   +-> x
 
-# CENTER = (50.82083333, -1.310983333)  # Calshot sailboats
-CENTER = (50.82046666, -1.311983333)  # Calshot micro-sailboats
+#   A ------------> B
+#
+#
+#   B ------------> A
 
-################################################################################
+wpA = (29.863003, 121.542088)
+wpB = (29.863291, 121.541788)
+RADIUS = 5 #acceptance radius in m
 
-CENTER_utm = latlon_to_utm(CENTER[0], CENTER[1])
+#######################################################################################
 
-def dist2center(M):
-    return dist2wp(M, CENTER_utm)
+# Convert all coordinates to UTM, so we can work with metres on a flat plane
+wpA_utm = latlon_to_utm(wpA[0], wpA[1])
+wpB_utm = latlon_to_utm(wpB[0], wpB[1])
 
 def dist2wp(M, wp):
+    """Direct distance between two points in metres"""
     return math.sqrt((M[0]-wp[0])**2 + (M[1] - wp[1])**2) 
 
-def analyse_file(FILE):
-    # Competition rules
-    RADIUS = 20 # 20 m
-    TIMESPAN = 5 * 60   # 5 minutes
+def isWpReached(M, wp):
+    return dist2wp(M, wp) < RADIUS
 
-    time = []
+def is_csv(file_name):
+    return file_name.endswith(".csv")
+
+def analyse_hide_and_seek(csv_file, path, output):
     positions_utm = []
-
-    # Read file
-    with open(FILE) as logfile:
+    with open(path) as logfile:
         data = csv.reader(logfile, delimiter=',')
         for row in list(data)[1:]:
-            time.append(datetime.datetime.strptime(row[0], "%Y-%m-%dT%H:%M:%SZ").timestamp()) #store epoch
+            time = datetime.datetime.strptime(row[0], "%Y-%m-%dT%H:%M:%SZ")
             latitude = float(row[1])
             longitude = float(row[2])
-            positions_utm.append(latlon_to_utm(latitude, longitude))
+                
+            positions_utm.append((time, latlon_to_utm(latitude, longitude)))
 
+    starttime = 0
+    WPA_REACHED = False
+    WPB_REACHED = False
+    hide_time = 0
+    HIDE = 0
+    Mode = '0' # 0: A/B, A: TOWARDS A, B: TOWARDS B
+    line = '' + csv_file + ','
 
-    # iterate through points:
-    # Find first point in 20 m radius
-    idx = 0
-    distance = 23
-    while distance > RADIUS:
-        idx +=1
-        if idx >= len(positions_utm):
-            print(FILE + " not reached the zone")
-            return
-        distance = dist2center(positions_utm[idx])
+    for timestamp, point in positions_utm:
 
-    ## get time of that point
-    startTime = time[idx]
+        if Mode == '0' and isWpReached(point, wpA_utm):
+            # or isWpReached(point, wpA_utm)):
+            Mode = 'B'
+            print("WPA reached at", timestamp)
+            start_time = timestamp
+            line = line + ',' + 'A' + ',' + timestamp
 
-    # get all points from the next 5 minutes
-    endTime = startTime + TIMESPAN
-    endIdx = bisect.bisect(time, endTime)
-    if endIdx >= len(positions_utm):
-        print("end of 5 minute position keeping not in dataset!")
-        print(0)
-        return
+        if Mode == '0' and isWpReached(point, wpB_utm):
+            # or isWpReached(point, wpA_utm)):
+            Mode = 'A'
+            print("WPB reached at", timestamp)
+            start_time = timestamp
+            line = line + ',' + 'B' + ',' + timestamp
 
-    positionsOfInterest = positions_utm[idx:endIdx]
+        if Mode == 'A' and isWpReached(point, wpA_utm):
+            # or isWpReached(point, wpA_utm)):
+            Mode = 'B'
+            print("WPA reached at", timestamp)
+            start_time = timestamp
+            line = line + ',' + 'A' + ',' + timestamp
+            hide_time += 1
 
-    print('Using %d points' % len(positionsOfInterest))
+        if Mode == 'B' and isWpReached(point, wpB_utm):
+            # or isWpReached(point, wpA_utm)):
+            Mode = 'A'
+            print("WPB reached at", timestamp)
+            start_time = timestamp
+            line = line + ',' + 'B' + ',' + timestamp
+            hide_time += 1
+                   
+        line = str(hide_time) +  line + '\n'
+        output.write(line)
 
-    # get Pc (average of points in 5 minute time keeping attempt)
-    Pc = numpy.array(positionsOfInterest).mean(axis=0)
+if __name__ == "__main__":
+    path = './data/North/PM'
+    # csv_file = sys.argv[1]
+    out_file = open("day4_data_N_PM_B.csv", 'w')
+    for _, _, files in os.walk(path):
+        for file in files:
+            if is_csv(file):
+                get_score(file, os.path.join(path, file), out_file)
 
-    if dist2center(Pc) > RADIUS:
-        print("Pc is outside the 20 m circle!")
-        return 
-
-    # calculate distance to Pc for all points
-    Pc_distances = [dist2wp(point, Pc) for point in positionsOfInterest]
-
-    # remove 5% of points with largest distance to Pc
-    # find next largest distance, this is the radius
-    Pc_distances.sort()
-    #print(Pc_distances)
-    idx_95 = int(round(len(Pc_distances) * 0.95))
-    considered_95 = Pc_distances[0:idx_95]
-    finalRadius = considered_95[-1]
-    print("The position keeping radius is " + str(finalRadius))
-
-for FILE in sys.argv[1:]:
-    print(FILE)
-    analyse_file(FILE)
-    print()
