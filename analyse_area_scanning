@@ -1,42 +1,13 @@
-#!/usr/bin/python3
-# -*- coding: utf-8 -*-
-"""
-Analyse the result of a set of area scanning attempts.
-
-This is the most complex analysis, because the score for each attempt depends
-on other attempts.
-
-Briefly, the idea is that each square is worth one point, but that point may
-be divided among boats that visited the same square. The idea is to make the
-least visited squares more valuable, encouraging boats to collectively scan
-more of the grid. See the rules for more details.
-
-We gave each class a time window, but allowed shorter attempts later in the day.
-Attempts within the time window were scored against other attempts in the same window.
-Later attempts were scored against attempts both in and out of the window,
-but a boat was not penalised for visiting the same cell in multiple attempts.
-
-Usage:
-
-    ./analyse_area_scanning master.csv
-
-The master CSV is a CSV file listing the attempts made by boats in one class.
-It's expected to have columns boat_name, in_window and filename (pointing to
-the GPS trace for that attempt).
-"""
-
 import csv
 import sys
 import pandas as pd
-import collections
-from fractions import Fraction
-import json
+import datetime
 
 from pyproj import Proj
 import numpy as np
 
 # Your UTM zone depends on your longitude; see http://www.dmap.co.uk/utmworld.htm
-utm_zone = 30
+utm_zone = 51
 
 projection = Proj(proj='utm', zone=utm_zone, ellps='WGS84')
 
@@ -60,19 +31,14 @@ def utm_to_latlon(coord):
 #   +-> x
 #
 
-# Number of subdivisions of the grid
-subY = 58
-subX = 45
-cell_size = 4  # metres along side of one grid cell
+subY = 24
+subX = 24
+cell_size = 2.5 
 
-wpC = (50.8210729998,-1.31465664793)
-wpD = (50.8222207292,-1.31285527881)
-wpA = (50.8196023064,-1.31232136805)
-wpB = (50.82075,-1.31052)
+wpA = [29.86719457094162, 121.5382643168712]
+wpB = [29.86702872486077, 121.5388580404463]
+wpC = [29.86769032147261, 121.5385162033053]
 
-################################################################################
-
-# Convert all coordinates to UTM, so we can work with metres on a flat plane
 wpA_utm = latlon_to_utm(wpA[0], wpA[1])
 wpB_utm = latlon_to_utm(wpB[0], wpB[1])
 wpC_utm = latlon_to_utm(wpC[0], wpC[1])
@@ -99,91 +65,72 @@ def cell_ij_to_coord(i,j):
             utm_to_latlon(C),
             utm_to_latlon(D))
 
-def generate_visit_set(filename):
-    """Find the set of grid squares visited by one attempt.
+def coord_to_cell_ij(point):
+    x, y = latlon_to_utm(point[0], point[1])
+    point_base = [x - wpA_utm[0], y - wpA_utm[1]]
+    point_i = np.dot(point_base, vAB)*subX/AB
+    point_j = np.dot(point_base, vAB_orth)*subY/AC
+    if (0 <= point_i < subX) and (0 <= point_j < subY):
+        return[int(point_i), int(point_j)]
 
-    *filename* should point to a CSV file of a GPS track (timestamp, lat, long).
-    """
-    with open(filename) as logfile:
-        data = csv.reader(logfile, delimiter=',')
-        position_utm = []
-        for row in list(data)[1:]:
-            latitude = float(row[1])
-            longitude = float(row[2])
-            position_utm.append(latlon_to_utm(latitude, longitude))
+def combine_attempts(master_file_name):
+    group_attempts = pd.read_csv(master_file_name, names=['team', 'attempt'])
+    group_df = pd.DataFrame()
+    total_attempt_time = {}
+    for index, row in group_attempts.iterrows():
+        attempt_csv = row.attempt
+        print(attempt_csv)
+        team = row.team
+        print(team)
+        attempt_df = pd.read_csv(attempt_csv, names=['time','latitude','longitude','speed','course'])
+        attempt_df['time'] = attempt_df['time'].apply(pd.to_datetime)
+        attempt_df.set_index('time', inplace=True)
+        if team not in total_attempt_time:
+            total_attempt_time[team] = datetime.timedelta(0, 0)
+        attempt_df['team'] = row.team
+        attempt_time = attempt_df.index[-1] - attempt_df.index[0]
+        #print((attempt_time + total_attempt_time[team]) < datetime.timedelta(seconds=15*60))
+        if (attempt_time + total_attempt_time[team]) < datetime.timedelta(seconds=15*60):
+            group_df = pd.concat([group_df, attempt_df])
+            total_attempt_time[team] += attempt_time
+            print(team + str(total_attempt_time[team]))
+            # print(team + ' less than 15 mins')
+        else:
+            remaining_attempt_time = datetime.timedelta(seconds=15*60) - total_attempt_time[team]
+            last_valid_point = attempt_df.index[0] + remaining_attempt_time
+            group_df = pd.concat([group_df, attempt_df.loc[:last_valid_point]])
+            total_attempt_time[team] = datetime.timedelta(seconds=15*60)
+            print(team + str(total_attempt_time[team]))
+            # print(team + ' reaches 15 mins ')
+            # Only maintain the first 15 mins
+        #print(total_attempt_time)
+        group_df = group_df.sort_index()
+    return group_df
 
-    outputs = set()
+def team_score(group_df):
+    df = group_df
+    team_visited_grids = {}
 
-    for point in position_utm: 
-        # projection of point in the (wpA_utm; vAB,vAB_orth) base
-        # i.e. convert UTM coordinates to coordinates in terms of grid cells.
-        point_base = [point[0] - wpA_utm[0], point[1] - wpA_utm[1]]
-        point_i = np.dot(point_base, vAB)*subX/AB
-        point_j = np.dot(point_base, vAB_orth)*subY/AC
-        
-        if (0 <= point_i < subX) and (0 <= point_j < subY):
-            outputs.add((int(point_i), int(point_j)))
+    team_scores = {}
+    for index, row in df.iterrows():
+        grid_index = str(coord_to_cell_ij((row.latitude, row.longitude)))
+        team = row.team
+        if grid_index not in team_visited_grids:
+            team_visited_grids[grid_index] = [team]
+        elif team not in team_visited_grids[grid_index]:
+            team_visited_grids[grid_index].append(team)
 
-    return outputs
+    del team_visited_grids['None']
+    for grid_index, teams in team_visited_grids.items():
+        for team in teams:
+            if team not in team_scores:
+                team_scores[team] = 0
+            else:
+                #print((1/(teams.index(team)+1)))
+                team_scores[team] += (1/(teams.index(team)+1))
 
+    return team_scores
 
-CellVisitors = collections.namedtuple('CellVisitors', 'in_window out_of_window')
-
-# read master csv
-# Master data columns:
-#    filename
-#    boat_name
-#    in_window
-master_data = pd.read_csv(sys.argv[1])
-
-# For each attempt, get the set of cells visited
-master_data['visit_set'] = master_data.filename.apply(generate_visit_set)
-
-# Now find the total number of visitors for each cell
-attempt_per_cell = collections.defaultdict(int)
-for row in master_data.itertuples():
-    print(row.filename, len(row.visit_set), "squares visited")
-    for cell_pos in row.visit_set:
-        attempt_per_cell[cell_pos] += 1
-
-# Dump out data for plotting heat maps of how often cells were visited.
-data = []
-for cell, count in attempt_per_cell.items():
-    data.append([cell_ij_to_coord(cell[0],cell[1]), count])
-with open("heat_map_data"+sys.argv[1]+".json",'w') as f:
-    json.dump(data,f)
-
-# Build map of what teams visited which cells, in their in-window and out-of-window attempts
-cell_visits = collections.defaultdict(lambda: CellVisitors(set(), set()))
-for row in master_data[master_data.in_window].itertuples():
-    for cell in row.visit_set:
-        cell_visits[cell].in_window.add(row.boat_name)
-
-for row in master_data[~master_data.in_window].itertuples():
-    for cell in row.visit_set:
-        cell_visits[cell].out_of_window.add(row.boat_name)
- 
-# Calculate the points for in-windown and out-of-window attempts, dividing
-# the point for each grid square among boats that visited it.
-boat_total_points_in_window = collections.defaultdict(int)
-for row in master_data[master_data.in_window].itertuples():
-    for cell in row.visit_set:
-        boat_total_points_in_window[row.boat_name] += \
-            Fraction(1, len(cell_visits[cell].in_window))
-
-boat_total_points_out_of_window = collections.defaultdict(int)
-for row in master_data[~master_data.in_window].itertuples():
-    for cell in row.visit_set:
-        boat_total_points_out_of_window[row.boat_name] += \
-            Fraction(1, len(cell_visits[cell].in_window | cell_visits[cell].out_of_window))
-
-# Display results
-print()
-print("Attempts in time window:")
-for boat, total_points in sorted(boat_total_points_in_window.items()):
-    print(boat, float(total_points), 'points')
-
-print()
-print("Attempts out of time window:")
-for boat, total_points in sorted(boat_total_points_out_of_window.items()):
-    print(boat, float(total_points), 'points')
+if __name__ == "__main__":
+    group_df = combine_attempts(sys.argv[1])
+    print(team_score(group_df))
